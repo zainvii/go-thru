@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JsSIP Client</title>
+  <title>Ezra Client</title>
   <script src="https://jssip.net/download/releases/jssip-3.10.0.min.js"></script>
 </head>
 <body>
-  <h1>JsSIP Client</h1>
+  <h1>Ezra Client</h1>
   <button id="callButton">Call</button>
+  <button id="endCallButton" disabled>End Call</button>
   <audio id="remoteAudio" controls></audio>
   <script>
     const ip = '16.171.19.35';
@@ -16,6 +17,8 @@
     const peer = '9003001';
     const port = '8089';
     const target = '111222';
+
+    let currentSession = null;
 
     document.getElementById('callButton').addEventListener('click', () => {
       const socket = new JsSIP.WebSocketInterface(`wss://${ip}:${port}/ws`);
@@ -38,12 +41,17 @@
           },
           failed: function (e) {
             console.log('call failed with cause: ' + e.cause);
+            currentSession = null;
+            document.getElementById('endCallButton').disabled = true;
           },
           ended: function (e) {
             console.log('call ended with cause: ' + e.cause);
+            currentSession = null;
+            document.getElementById('endCallButton').disabled = true;
           },
           confirmed: function (e) {
             console.log('call confirmed');
+            document.getElementById('endCallButton').disabled = false;
           }
         };
 
@@ -53,6 +61,7 @@
         };
 
         const session = userAgent.call(`sip:${target}@${ip}`, options);
+        currentSession = session;
 
         session.connection.addEventListener('track', (event) => {
           const remoteAudio = document.getElementById('remoteAudio');
@@ -63,6 +72,15 @@
       });
 
       userAgent.start();
+    });
+
+    document.getElementById('endCallButton').addEventListener('click', () => {
+      if (currentSession) {
+        currentSession.terminate();
+        currentSession = null;
+        document.getElementById('endCallButton').disabled = true;
+        console.log('Call terminated');
+      }
     });
   </script>
 </body>
