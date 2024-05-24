@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JsSIP Client</title>
+  <script src="https://jssip.net/download/releases/jssip-3.10.0.min.js"></script>
+</head>
+<body>
+  <h1>JsSIP Client</h1>
+  <button id="callButton">Call</button>
+  <audio id="remoteAudio" controls></audio>
+  <script>
+    const ip = '16.171.19.35';
+    const password = 'asdfghjkl';
+    const peer = '9003001';
+    const port = '8089';
+    const target = '111222';
+
+    document.getElementById('callButton').addEventListener('click', () => {
+      const socket = new JsSIP.WebSocketInterface(`wss://${ip}:${port}/ws`);
+      const configuration = {
+        sockets: [socket],
+        uri: `sip:${peer}@${ip}`,
+        password: password,
+        register: true
+      };
+
+      const userAgent = new JsSIP.UA(configuration);
+
+      userAgent.on('registered', () => {
+        console.log('Registered successfully');
+
+        // Initiate a call
+        const eventHandlers = {
+          progress: function (e) {
+            console.log('call is in progress');
+          },
+          failed: function (e) {
+            console.log('call failed with cause: ' + e.cause);
+          },
+          ended: function (e) {
+            console.log('call ended with cause: ' + e.cause);
+          },
+          confirmed: function (e) {
+            console.log('call confirmed');
+          }
+        };
+
+        const options = {
+          eventHandlers: eventHandlers,
+          mediaConstraints: { audio: true, video: false }
+        };
+
+        const session = userAgent.call(`sip:${target}@${ip}`, options);
+
+        session.connection.addEventListener('track', (event) => {
+          const remoteAudio = document.getElementById('remoteAudio');
+          const [remoteStream] = event.streams;
+          remoteAudio.srcObject = remoteStream;
+          remoteAudio.play();
+        });
+      });
+
+      userAgent.start();
+    });
+  </script>
+</body>
+</html>
