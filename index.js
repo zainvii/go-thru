@@ -26,7 +26,7 @@ const initiateAudio = function(audioStream){
   });
 }
 
-// const initateSip = function(){
+ const initateSip = function(){
   // SIP account configuration
 const sipConfiga = {
   uri: 'sip:9003002@13.60.56.248:8089',
@@ -118,7 +118,7 @@ userAgent.on('newRTCSession', (data) => {
     });
   }
 });
-// }
+ }
 
 // initateSip()
 
