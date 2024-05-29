@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ezra Client</title>
   <script src="https://jssip.net/download/releases/jssip-3.10.0.min.js"></script>
+  <script type="text/javascript" src="//tc-bpo.callcenterstudio.com/click2connects/c2c.js?widget_key=ahRzfm11c3RlcmktaGl6bWV0bGVyaXIaCxINQ2xpY2syQ29ubmVjdBiAgLLw-tWXCAyiARt0Yy1icG8uY2FsbGNlbnRlcnN0dWRpby5jb20"></script>
+ 
 </head>
 <body>
   <h1>Ezra Client</h1>
@@ -12,16 +14,23 @@
   <button id="endCallButton" disabled>End Call</button>
   <audio id="remoteAudio" controls></audio>
   <script>
-    const ip = '16.171.19.35';
-    const password = 'asdfghjkl';
-    const peer = '9003001';
-    const port = '8089';
-    const target = '111222';
+    // const ip = '16.171.19.35';
+    // const password = 'asdfghjkl';
+    // const peer = '9003001';
+    // const port = '8089';
+
+
+  const ip = '34.67.132.35';
+  const password = 'asd32EASdYKfL';
+  const peer = 'tribe-demo';
+  const port = '5060';
+
+    const target = '18722990045';
 
     let currentSession = null;
 
     document.getElementById('callButton').addEventListener('click', () => {
-      const socket = new JsSIP.WebSocketInterface(`wss://${ip}:${port}/ws`);
+      const socket = new JsSIP.WebSocketInterface(`ws://${ip}:${port}`);
       const configuration = {
         sockets: [socket],
         uri: `sip:${peer}@${ip}`,
@@ -75,13 +84,18 @@
     });
 
     document.getElementById('endCallButton').addEventListener('click', () => {
-      if (currentSession) {
-        currentSession.terminate();
-        currentSession = null;
-        document.getElementById('endCallButton').disabled = true;
-        console.log('Call terminated');
-      }
+      debugger
+    startWidget({
+user_data: {storeID: ""}
+});
+      // if (currentSession) {
+      //   currentSession.terminate();
+      //   currentSession = null;
+      //   document.getElementById('endCallButton').disabled = true;
+      //   console.log('Call terminated');
+      // }
     });
+
   </script>
 </body>
 </html>
