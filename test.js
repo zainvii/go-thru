@@ -3,8 +3,13 @@ const Speaker = require('speaker');
 const JsSIP = require('jssip');
 const NodeWebSocket = require('jssip-node-websocket');
 
+
+ const ip = '16.171.19.35';
+    // const password = 'asdfghjkl';
+    // const peer = '9003001';
+    // const port = '8089';
 // SIP account configuration
-const ip = '34.67.132.35';
+// const ip = '34.67.132.35';
 const password = 'asd32EASdYKfL';
 const peer = 'tribe-demo';
 const port = '5060';
