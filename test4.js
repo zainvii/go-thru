@@ -1,91 +1,77 @@
 const dgram = require('dgram');
-const crypto = require('crypto');
+const sip = require('sip');
 
-// SIP account details
-const username = 'tribe-demo';
-const password = 'asd32EASdYKfL';
-const realm = '34.67.132.35';
-const sipServer = '34.67.132.35';
-const myIp = '3.217.139.195';
-const myProxy = '10.8.0.15';
-const sipServerPort = 5060;
+// Configure SIP and RTP
+const localIp = '127.0.0.1';
+const localSipPort = 5060;
+const localRtpPort = 10000; // Local RTP port for receiving
+const remoteRtpPort = 10002; // This will be updated upon receiving 200 OK
 
-// Create a UDP socket
-const socket = dgram.createSocket('udp4');
+// Create RTP socket
+const rtpSocket = dgram.createSocket('udp4');
 
-// Generate a unique Call-ID
-const callId = crypto.randomBytes(16).toString('hex');
+// Handle incoming RTP packets
+rtpSocket.on('message', (msg, rinfo) => {
+  console.log(`Received RTP packet from ${rinfo.address}:${rinfo.port}`);
+  // Handle RTP payload (e.g., decode audio)
+});
 
-// Generate a unique CSeq number
-const cseq = Math.floor(Math.random() * 10000);
+// Bind RTP socket
+rtpSocket.bind(localRtpPort, localIp, () => {
+  console.log(`RTP socket listening on ${localIp}:${localRtpPort}`);
+});
 
-// Construct the SIP REGISTER message
-const registerMessage = `
-REGISTER sip:${realm} SIP/2.0
-Via: SIP/2.0/UDP ${myIp};branch=z9hG4bK${crypto.randomBytes(8).toString('hex')}
-Max-Forwards: 70
-From: <sip:${username}@${realm}>;tag=${crypto.randomBytes(8).toString('hex')}
-To: <sip:${username}@${realm}>
-Call-ID: ${callId}
-CSeq: ${cseq} REGISTER
-Contact: <sip:${username}@${myIp}>
-Expires: 3600
-User-Agent: MySIPClient/1.0
-Content-Length: 0
+// Function to send SIP INVITE
+function sendInvite() {
+  const invite = {
+    method: 'INVITE',
+    uri: `sip:remote-user@${localIp}`,
+    headers: {
+      to: { uri: `sip:remote-user@${localIp}` },
+      from: { uri: `sip:local-user@${localIp}`, params: { tag: 'local-tag' } },
+      'call-id': 'unique-call-id',
+      cseq: { method: 'INVITE', seq: Math.floor(Math.random() * 1e5) },
+      contact: [{ uri: `sip:local-user@${localIp}` }],
+      'content-type': 'application/sdp'
+    },
+    content: [
+      'v=0',
+      `o=- 12345 67890 IN IP4 ${localIp}`,
+      's=-',
+      `c=IN IP4 ${localIp}`,
+      't=0 0',
+      `m=audio ${localRtpPort} RTP/AVP 0`,
+      'a=rtpmap:0 PCMU/8000'
+    ].join('\r\n')
+  };
 
-`.trim();
-
-// Function to send a message
-function sendMessage(message, port, address) {
-    socket.send(Buffer.from(message), port,  (err) => {
-        if (err) {
-            console.error('Error sending message:', err);
-        } else {
-            console.log('Message sent');
-        }
-    });
+  sip.send(invite, (response) => {
+    if (response.status === 200) {
+      console.log('Received 200 OK');
+      const sdp = response.content;
+      // Parse SDP to get remote RTP port
+      const remoteRtpPortMatch = sdp.match(/m=audio (\d+) RTP\/AVP/);
+      if (remoteRtpPortMatch) {
+        const remoteRtpPort = parseInt(remoteRtpPortMatch[1], 10);
+        console.log(`Remote RTP port: ${remoteRtpPort}`);
+        // Now send RTP packets to the remote port
+        sendRtpPackets(remoteRtpPort);
+      }
+    } else {
+      console.log(`Received SIP response: ${response.status}`);
+    }
+  });
 }
 
-// Handle incoming messages
-socket.on('message', (msg, rinfo) => {
-    const response = msg.toString();
-    console.log('Received response:', response);
-    
-    if (response.includes('401 Unauthorized')) {
-        // Extract the nonce from the 401 response
-        const nonce = response.match(/nonce="([^"]+)"/)[1];
-        
-        // Generate a response using the nonce
-        const ha1 = crypto.createHash('md5').update(`${username}:${realm}:${password}`).digest('hex');
-        const ha2 = crypto.createHash('md5').update(`REGISTER:sip:${realm}`).digest('hex');
-        const responseHash = crypto.createHash('md5').update(`${ha1}:${nonce}:${ha2}`).digest('hex');
-        
-        // Construct the REGISTER message with authentication
-        const authRegisterMessage = `
-REGISTER sip:${realm} SIP/2.0
-Via: SIP/2.0/UDP ${myIp};branch=z9hG4bK${crypto.randomBytes(8).toString('hex')}
-Max-Forwards: 70
-From: <sip:${username}@${realm}>;tag=${crypto.randomBytes(8).toString('hex')}
-To: <sip:${username}@${realm}>
-Call-ID: ${callId}
-CSeq: ${cseq + 1} REGISTER
-Contact: <sip:${username}@${myIp}>
-Expires: 3600
-User-Agent: MySIPClient/1.0
-Authorization: Digest username="${username}", realm="${realm}", nonce="${nonce}", uri="sip:${realm}", response="${responseHash}", algorithm=MD5
-Content-Length: 0
+// Function to send RTP packets
+function sendRtpPackets(remoteRtpPort) {
+  const message = Buffer.from('Your RTP payload data');
+  setInterval(() => {
+    rtpSocket.send(message, 0, message.length, remoteRtpPort, localIp, (err) => {
+      if (err) console.error('Error sending RTP packet:', err);
+    });
+  }, 1000 / 50); // Example: send 50 RTP packets per second
+}
 
-`.trim();
-
-        // Send the authenticated REGISTER message
-        sendMessage(authRegisterMessage, sipServerPort, myProxy);
-    }
-});
-
-// Bind the socket to a local port
-socket.bind(() => {
-    console.log(`Socket bound to port ${socket.address().port}`);
-    
-    // Send the initial REGISTER message
-    sendMessage(registerMessage, sipServerPort, myProxy);
-});
+// Start by sending the SIP INVITE
+sendInvite();
