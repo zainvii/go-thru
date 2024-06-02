@@ -26,6 +26,7 @@
     "node-rtp": "^0.1.1",
     "portfinder": "^1.0.32",
     "rtp-parser": "^1.0.0",
+    "selenium-webdriver": "^4.21.0",
     "speaker": "^0.5.5",
     "wav": "^1.0.2"
   }

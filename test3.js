@@ -1,14 +1,10 @@
 const dgram = require('dgram');
 const crypto = require('crypto');
 const readline = require('readline');
-const fs = require('fs');
 const Speaker = require('speaker');
 const wav = require('wav');
-const rtpParser  = require('rtp-parser'); // Placeholder for RTP parsing logic
-const recorder = require('node-record-lpcm16');
 const mic = require('mic');
 const portfinder = require('portfinder');
-const { Readable } = require('stream'); // Import Readable from the stream module
 
 portfinder.basePort = 10000;
 portfinder.highestPort = 60000;
@@ -292,8 +288,6 @@ socket.on('listening', () => {
 });
 
 socket.bind(regPort,"0.0.0.0")
-
-const sendSocket = dgram.createSocket('udp4');
 let micStarted = false;
 let sendPort = '' 
 let sendIp = ''
@@ -337,31 +331,7 @@ function sendMicrophoneData() {
     micInstance.start();
     micStarted = true
     }
-    
-    // setTimeout(() => {
-    //   micInstance.stop();
-    // }, 10000);
     return;
-    const mic = recorder.record({
-        sampleRate: 44100,
-        channels: 1,
-        bitDepth: 16
-    }).start();
-
-    mic.stream().on('data', (chunk) => {
-        console.log("🚀 ~ mic.on ~ chunk:", chunk)
-        sendSocket.send(chunk, PORT, IP, (err) => {
-            if (err) {
-                console.error('Error sending audio data:', err);
-            }
-        });
-    });
-
-    mic.stream().on('error', (err) => {
-        console.error('Microphone error:', err);
-    });
-
-    console.log(`Sending microphone data to ${IP}:${PORT}`);
 }
 
 const recvSocket = dgram.createSocket('udp4');
@@ -411,7 +381,6 @@ function receiveAudioData(PORT, IP) {
   });
   let buffer = Buffer.alloc(0);
 }
-
 
 // =============================================
 
