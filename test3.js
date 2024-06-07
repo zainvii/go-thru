@@ -96,12 +96,12 @@ const micInstance = mic({
 
 const username = 'tribe-demo';
 const password = 'asd32EASdYKfL';
-const realm = '34.67.132.35';
-const sipServer = '34.67.132.35';
-const myIp = '3.217.139.195'
-const myProxy = '10.8.0.15';
+const realm = '35.226.118.225';//'34.67.132.35';
+const sipServer = '35.226.118.225';//'34.67.132.35';
+const myIp = '38.125.249.73'; //'39.63.120.177';// '3.217.139.195';
+const myProxy = '192.168.0.87';//'192.168.100.64';//'10.8.0.15';;
 const sipServerPort = 5060;
-const target = 'sip:18722990045@34.67.132.35';
+const target = 'sip:18722990045@35.226.118.225';
 const destination = '18722990045';
 // Create a UDP socket
 const socket = dgram.createSocket('udp4');

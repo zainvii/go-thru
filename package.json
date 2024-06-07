@@ -11,7 +11,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@vonage/server-sdk": "^3.14.1",
     "audio-decode": "^2.2.0",
+    "body-parser": "^1.20.2",
     "dgram": "^1.0.1",
     "dotenv": "^16.4.5",
     "drachtio-srf": "^4.5.38",
@@ -28,6 +30,7 @@
     "rtp-parser": "^1.0.0",
     "selenium-webdriver": "^4.21.0",
     "speaker": "^0.5.5",
-    "wav": "^1.0.2"
+    "wav": "^1.0.2",
+    "ws": "^8.17.0"
   }
 }

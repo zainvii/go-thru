@@ -18,19 +18,22 @@
     // const password = 'asdfghjkl';
     // const peer = '9003001';
     // const port = '8089';
+    const ip = '16.171.161.231';
+    const password = 'asdfghjkl';
+    const peer = '9003001';
+    const port = '8089';
 
-
-  const ip = '34.67.132.35';
-  const password = 'asd32EASdYKfL';
-  const peer = 'tribe-demo';
-  const port = '5060';
+  // const ip = '34.67.132.35';
+  // const password = 'asd32EASdYKfL';
+  // const peer = 'tribe-demo';
+  // const port = '5060';
 
     const target = '18722990045';
 
     let currentSession = null;
 
     document.getElementById('callButton').addEventListener('click', () => {
-      const socket = new JsSIP.WebSocketInterface(`ws://${ip}:${port}`);
+      const socket = new JsSIP.WebSocketInterface(`wss://${ip}:${port}/ws`);
       const configuration = {
         sockets: [socket],
         uri: `sip:${peer}@${ip}`,
