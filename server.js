@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const JsSIP = require('jssip');
 const NodeWebSocket = require('jssip-node-websocket');
-const {service} = require('./service')
+const {service} = require('./udpService')
 // ======================================
 const ip = process.env.SIP_IP;
 const password = process.env.SIP_PASSWORD;
@@ -46,7 +46,7 @@ const sipConfig = {
 
   app.get('/speaker-check', (req, res) => {
     try {
-         service.createStream();
+        //  service.createStream();
     } catch (error) {
         console.error('Error initiating SIP call:', error);
         res.status(500).send('Internal Server Error');
@@ -55,7 +55,7 @@ const sipConfig = {
 
   app.get('/initiate-sip', (req, res) => {
     try {
-        return service.initateSip(userAgent)
+        // return service.initateSip(userAgent)
     } catch (error) {
         console.error('Error initiating SIP call:', error);
         res.status(500).send('Internal Server Error');
@@ -64,12 +64,13 @@ const sipConfig = {
 
   app.get('/initiate-call', (req, res) => {
     try {
-        const input = {
-            target,
-            ip,
-            port 
-        }
-        return service.initiateCall(userAgent,input, res)
+        // const input = {
+        //     target,
+        //     ip,
+        //     port 
+        // }
+        // return service.initiateCall(userAgent,input, res)
+        service.initateConn();
     } catch (error) {
         console.error('Error initiating SIP call:', error);
         res.status(500).send('Internal Server Error');

@@ -89,10 +89,13 @@ const initiateCall = async() => {
   const sip_phone = 'sip:18728880764@34.68.85.72';
   const answerUrl = [`${localServerUrl}/answer`];
   const eventUrl = [`${localServerUrl}/event`];
+  // username:- testing
+  // pass:- EzraTechnologies123
+  // testing.sip-us.vonage.com
 
   // 1) conect our socket to neximo
   // 2) return every socket in answerUrl
-
+const mySip = "sip:1234@testing.sip-us.vonage.com";
   let nexmoAudioStreamNCCO = {
     action: "connect",
     endpoint: [
@@ -133,21 +136,23 @@ const initiateCall = async() => {
   // },
 ];
 
-  // let sipNCCO = {
-  //   action: "connect",
-  //   from: '12063415702',
-  //   endpoint: [
-  //     {
-  //       type: "sip",
-  //       uri: sip_phone,
-  //     },
-  //   ],
-  //   eventUrl:eventUrl
-  // };
+  let sipNCCO = {
+    action: "connect",
+    from: '12063415702',
+    endpoint: [
+      {
+        type: "sip",
+        uri: mySip,
+      },
+    ],
+    eventUrl:eventUrl
+  };
   // ncco.push(sipNCCO)
-  ncco.push(ringToneNCCO);
+  ncco.push(sipNCCO);
   try {
     const call = await vonage.voice.createOutboundCall(ncco)
+    // const data = await vonage.accounts.getBalance()
+    // console.log("🚀 ~ initiateCall ~ data:", data)
     console.log(call.uuid);
   } catch (error) {
     console.log("🚀 ~ initiateCall ~ error:", error);

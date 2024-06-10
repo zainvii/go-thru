@@ -2,91 +2,10 @@ const dgram = require('dgram');
 const crypto = require('crypto');
 const readline = require('readline');
 const Speaker = require('speaker');
-const wav = require('wav');
 const mic = require('mic');
-const portfinder = require('portfinder');
+const fs = require('fs');
+require('dotenv').config();
 
-portfinder.basePort = 10000;
-portfinder.highestPort = 60000;
-// Decode G.711 PCMU (mu-law) to PCM
-function decodePCMU(pcmuBuffer) {
-  const pcmBuffer = Buffer.alloc(pcmuBuffer.length * 2);
-
-  for (let i = 0; i < pcmuBuffer.length; i++) {
-    const pcmu = pcmuBuffer[i];
-    pcmBuffer.writeInt16LE(muLawDecode(pcmu), i * 2);
-  }
-
-  return pcmBuffer;
-}
-
-function muLawDecode(value) {
-  const MULAW_MAX = 0x1FFF;
-  const MULAW_BIAS = 33;
-  value = ~value;
-  let sign = (value & 0x80);
-  let exponent = (value >> 4) & 0x07;
-  let mantissa = value & 0x0F;
-  let sample = ((mantissa << 3) + MULAW_BIAS) << exponent;
-  sample -= MULAW_BIAS;
-  if (sign !== 0) sample = -sample;
-  return sample;
-}
-
-// Decode G.711 PCMA (A-law) to PCM
-function decodePCMA(pcmaBuffer) {
-  const pcmBuffer = Buffer.alloc(pcmaBuffer.length * 2);
-
-  for (let i = 0; i < pcmaBuffer.length; i++) {
-    const pcma = pcmaBuffer[i];
-    pcmBuffer.writeInt16LE(aLawDecode(pcma), i * 2);
-  }
-
-  return pcmBuffer;
-}
-
-function aLawDecode(value) {
-  value ^= 0x55;
-  let sign = value & 0x80;
-  let exponent = (value & 0x70) >> 4;
-  let data = value & 0x0F;
-  data <<= 4;
-  data += 8;
-  if (exponent !== 0) {
-    data += 0x100;
-    if (exponent > 1) data <<= (exponent - 1);
-  }
-  return (sign === 0x80) ? -data : data;
-}
-function getCodecType(payloadType) {
-  if (payloadType === 0) { // Payload type 0 for PCMU
-    return 'PCMU';
-  } else if (payloadType === 8) { // Payload type 8 for PCMA
-    return 'PCMA';
-  } else {
-    return 'UNKNOWN';
-  }
-}
-
-
-
-
-// Function to find two available ports
-const findTwoPorts = async () => {
-  try {
-    const port1 = await portfinder.getPortPromise();
-    console.log(`Found first available port: ${port1}`);
-
-    // To ensure the second port is different, set the basePort to port1 + 1
-    portfinder.basePort = port1 + 1;
-    const port2 = await portfinder.getPortPromise();
-    console.log(`Found second available port: ${port2}`);
-
-    return { port1, port2 };
-  } catch (err) {
-    console.error(`Error finding ports: ${err.message}`);
-  }
-};
 const micInstance = mic({
   rate: '16000',
   channels: '1',
@@ -94,23 +13,18 @@ const micInstance = mic({
   exitOnSilence: 6
 });
 
-const username = 'tribe-demo';
-const password = 'asd32EASdYKfL';
-const realm = '35.226.118.225';//'34.67.132.35';
-const sipServer = '35.226.118.225';//'34.67.132.35';
-const myIp = '38.125.249.73'; //'39.63.120.177';// '3.217.139.195';
-const myProxy = '192.168.0.87';//'192.168.100.64';//'10.8.0.15';;
-const sipServerPort = 5060;
-const target = 'sip:18722990045@35.226.118.225';
-const destination = '18722990045';
+const username = process.env.SIP_USER || 'tribe-demo1';
+const password = process.env.SIP_USER_SECRET || 'asd32EASdYKfL';
+const realm = process.env.SIP_USER_IP || '35.226.118.225';;
+const sipServer = process.env.SIP_USER_SERVER_IP || '35.226.118.225';;
+const myIp = process.env.MACHINE_PUB_IP || '3.217.139.195'; // public ip
+const myProxy = process.env.MACHINE_PRIVATE_IP || '10.8.0.15'; // private ip
+const sipServerPort = process.env.SIP_USER_PORT || 5060;
+const target = process.env.SIP_USER_TARGET || 'sip:18722990045@35.226.118.225';
+const destination = process.env.SIP_DESTINATION || '18722990045';
 // Create a UDP socket
 const socket = dgram.createSocket('udp4');
-const wavReader = new wav.Reader();
-
-wavReader.on('format', (format) => {
-  console.log("🚀 ~ wavReader.on ~ format:", format)
-  // wavReader.pipe(speaker);
-});
+const recvSocket = dgram.createSocket('udp4');
 // Generate a random Call-ID and CSeq
 const callId = crypto.randomBytes(16).toString('hex');
 let cseq = 1;
@@ -124,11 +38,19 @@ const localUri = `sip:${username}@${realm}`;
 // Define the contact URI
 const contactUri = `sip:${username}@${myIp}`;
 
-// dynamicallyAssignedRtpPort=64582
-// let dynamicallyAssignedRtpPort=58637
-
 let alredy=[]
 let issend = false
+
+let regPort = 50760
+let dynamicallyAssignedRtpPort=57202
+let micStarted = false;
+let sendPort = '' 
+let sendIp = ''
+const RTP_HEADER_SIZE = 12;
+const MAX_PAYLOAD_SIZE = 1400;  // Maximum payload size to avoid exceeding MTU
+const SSRC = crypto.randomBytes(4).readUInt32BE(0);
+let sequenceNumber = 0;
+let timestamp = 0;
 // Listen for incoming messages from the SIP server
 socket.on('message', (message, rinfo) => {
   console.log('Received message:\n', message.toString());
@@ -173,6 +95,7 @@ socket.on('message', (message, rinfo) => {
     console.log('Audio Details:', audioDetails);
     sendPort = audioDetails.port;
     sendIp = audioDetails.ip;
+    sendMicrophoneData();
     // sendMicrophoneData(audioDetails.port,audioDetails.ip);
     // if(!alredy.includes(audioDetails.port)) {
     //     startRTPListening(audioDetails);
@@ -186,12 +109,10 @@ socket.on('message', (message, rinfo) => {
         console.log('Sender port:', rinfo.port);
         const sdp = extractSDP(message.toString('utf8'));
         const audioDetails = extractAudioDetails(sdp);
-        console.log('Audio Details:', audioDetails);
+        console.log('Audio Details-->:', audioDetails);
         sendPort = audioDetails.port;
     sendIp = audioDetails.ip;
-        // sendMicrophoneData(audioDetails.port,audioDetails.ip);
-        // const rtpPacket = parseRtpPacket(msg);
-        // wavReader.write(message);
+    sendMicrophoneData();
         const callId = message.toString('utf8').match(/Call-ID:\s*(.*)/)[1].trim();
         const cSeq = message.toString('utf8').match(/CSeq:\s*(\d+)\s*INVITE/)[1].trim();
         const fromTag = message.toString('utf8').match(/From:.*;tag=([\w\d]+)/)[1].trim();
@@ -248,63 +169,61 @@ socket.on('message', (message, rinfo) => {
   }
 });
 
-// Keep the program running
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-let regPort = 50760
-// findTwoPorts().then((ports) => {
-//   if (ports) {
-//     console.log(`Ports found: ${ports.port1}, ${ports.port2}`);
-//     dynamicallyAssignedRtpPort = ports.port1;
-//     regPort=ports.port2;
-let dynamicallyAssignedRtpPort=57202
-    // receiveAudioData(dynamicallyAssignedRtpPort, '0.0.0.0')
-// 
-    // You can now use these ports for your application
-//   }
+// // Keep the program running
+// const rl = readline.createInterface({
+//   input: process.stdin,
+//   output: process.stdout
 // });
 
-// const registerUser = dgram.createSocket('udp4');
-// // Bind to the specified port and listen for RTP packets
-// registerUser.on('message', (message, rinfo) => {
-//   console.log('Received message registerUser:\n', message.toString());
-// })
-// registerUser.on('listening', () => {
-//   const address = registerUser.address();
-//   // sendSIPMessage(createRegisterMessage(regPort));
-  
-//   console.log(`UDP register server listening on ${address.address}:${address.port}`);
-// });
-// registerUser.bind(regPort,"0.0.0.0")
 
 socket.on('listening', () => {
   const address = socket.address();
-  sendMicrophoneData()
+  // sendMicrophoneData()
   receiveAudioData(dynamicallyAssignedRtpPort, '0.0.0.0')
   console.log(`UDP server listening on ${address.address}:${address.port}`);
 });
 
-socket.bind(regPort,"0.0.0.0")
-let micStarted = false;
-let sendPort = '' 
-let sendIp = ''
+function initateConn() {
+  socket.bind(regPort,"0.0.0.0")
+}
+
+// Function to create an RTP packet
+function createRtpPacket(payload, sequenceNumber, timestamp) {
+  const header = Buffer.alloc(RTP_HEADER_SIZE);
+
+  // Set RTP header fields
+  header[0] = 0x80; // Version 2, no padding, no extension, 0 CSRC
+  header[1] = 0x00; // Marker bit 0, Payload type 0
+  header.writeUInt16BE(sequenceNumber, 2);
+  header.writeUInt32BE(timestamp, 4);
+  header.writeUInt32BE(SSRC, 8);
+
+  return Buffer.concat([header, payload]);
+}
+
+const outputFileStream = fs.createWriteStream('output.raw');
 // Function to send microphone data to IP2:PORT2
 function sendMicrophoneData() {
     // Capture audio from microphone
     const micInputStream = micInstance.getAudioStream();
-    micInputStream.on('data', (data) => {
-      // console.log('Receiving audio data:', data.length);
-      // console.log("🚀 ~ mic.on ~ chunk:", data)
+    micInputStream.on('data', (audioData) => {
       if(!!sendIp && !!sendPort) {
-        console.log('send audio data:', data.length, sendPort, sendIp);
-        recvSocket.send(data, sendPort, sendIp, (err) => {
-          if (err) {
-              console.error('Error sending audio data:', err);
-          }
-        });
+        let offset = 0;
+        while (offset < audioData.length) {
+          const chunkSize = Math.min(MAX_PAYLOAD_SIZE, audioData.length - offset);
+          const chunk = audioData.slice(offset, offset + chunkSize);
+      
+          const rtpPacket = createRtpPacket(chunk, sequenceNumber, timestamp);
+          recvSocket.send(rtpPacket, 0, rtpPacket.length,  sendPort, sendIp, (err) => {
+            if (err) {
+              console.error(`Error sending audio data: ${err.message}`);
+            }
+          });
+      
+          offset += chunkSize;
+          sequenceNumber = (sequenceNumber + 1) & 0xFFFF;
+          timestamp += chunkSize;
+        }
       }
     });
     micInputStream.on('error', (err) => {
@@ -328,13 +247,13 @@ function sendMicrophoneData() {
     });
     if(!micStarted){
       // Start recording
-    micInstance.start();
+        micInstance.start();
+    
     micStarted = true
     }
     return;
 }
 
-const recvSocket = dgram.createSocket('udp4');
 function receiveAudioData(PORT, IP) {
   function parseRtpPacket(msg) {
     const headerLength = 12;
@@ -381,7 +300,66 @@ function receiveAudioData(PORT, IP) {
   });
   let buffer = Buffer.alloc(0);
 }
+// ============================================
+function decodePCMU(pcmuBuffer) {
+  const pcmBuffer = Buffer.alloc(pcmuBuffer.length * 2);
 
+  for (let i = 0; i < pcmuBuffer.length; i++) {
+    const pcmu = pcmuBuffer[i];
+    pcmBuffer.writeInt16LE(muLawDecode(pcmu), i * 2);
+  }
+
+  return pcmBuffer;
+}
+
+function muLawDecode(value) {
+  const MULAW_MAX = 0x1FFF;
+  const MULAW_BIAS = 33;
+  value = ~value;
+  let sign = (value & 0x80);
+  let exponent = (value >> 4) & 0x07;
+  let mantissa = value & 0x0F;
+  let sample = ((mantissa << 3) + MULAW_BIAS) << exponent;
+  sample -= MULAW_BIAS;
+  if (sign !== 0) sample = -sample;
+  return sample;
+}
+
+// Decode G.711 PCMA (A-law) to PCM
+function decodePCMA(pcmaBuffer) {
+  const pcmBuffer = Buffer.alloc(pcmaBuffer.length * 2);
+
+  for (let i = 0; i < pcmaBuffer.length; i++) {
+    const pcma = pcmaBuffer[i];
+    pcmBuffer.writeInt16LE(aLawDecode(pcma), i * 2);
+  }
+
+  return pcmBuffer;
+}
+
+function aLawDecode(value) {
+  value ^= 0x55;
+  let sign = value & 0x80;
+  let exponent = (value & 0x70) >> 4;
+  let data = value & 0x0F;
+  data <<= 4;
+  data += 8;
+  if (exponent !== 0) {
+    data += 0x100;
+    if (exponent > 1) data <<= (exponent - 1);
+  }
+  return (sign === 0x80) ? -data : data;
+}
+
+function getCodecType(payloadType) {
+  if (payloadType === 0) { // Payload type 0 for PCMU
+    return 'PCMU';
+  } else if (payloadType === 8) { // Payload type 8 for PCMA
+    return 'PCMA';
+  } else {
+    return 'UNKNOWN';
+  }
+}
 // =============================================
 
 function sendAck(address, port) {
@@ -397,26 +375,10 @@ function sendAck(address, port) {
       client.close();
   });
 }
+
 function extractSDP(sipMessage) {
   const sdpIndex = sipMessage.indexOf('\r\n\r\n') + 4; // Find the start of SDP after the empty line
   return sipMessage.substring(sdpIndex);
-}
-// Function to extract audio details from SDP
-function extractAudioDetailsss(sdp) {
-const lines = sdp.split('\r\n');
-let audioDetails = {};
-
-lines.forEach(line => {
-  if (line.startsWith('m=audio')) {
-    const parts = line.split(' ');
-    audioDetails.port = parseInt(parts[1]);
-  } else if (line.startsWith('c=')) {
-    const parts = line.split(' ');
-    audioDetails.ip = parts[2];
-  }
-});
-
-return audioDetails;
 }
 
 function extractAudioDetails(sdp) {
@@ -466,54 +428,6 @@ socket.send(optionsResponse, rinfo.port, rinfo.address, (err) => {
     console.log('SIP OPTIONS response sent successfully.');
   }
 });
-}
-// Listen for RTP Packets
-function startRTPListening(audioDetails) {
-
-  // Create UDP socket
-const socketRTP = dgram.createSocket('udp4');
-
-// Configure speaker
-const speaker = new Speaker({
-channels: 1,          // 1 channel (mono)
-bitDepth: 16,         // 16-bit samples
-sampleRate: 8000      // 8,000 Hz sample rate (PCMU/PCMA are usually 8000 Hz)
-});
-
-// Function to parse RTP packet
-function parseRtpPacket(msg) {
-const headerLength = 12; // RTP header length is typically 12 bytes
-return {
-  payload: msg.slice(headerLength) // Extract payload after RTP header
-};
-}
-
-// Function to handle incoming RTP packets
-socketRTP.on('message', (msg, rinfo) => {
-console.log(`RTP packet received from ${rinfo.address}:${rinfo.port}`);
-
-// Parse the RTP packet
-const rtpPacket = parseRtpPacket(msg);
-
-// Write the audio payload to the speaker
-speaker.write(rtpPacket.payload);
-});
-
-// Error handling
-socketRTP.on('error', (err) => {
-console.error(`RTP socket error: ${err.message}`);
-socket.close();
-});
-
-
-socketRTP.on('listening', () => {
-  const address = socketRTP.address();
-  console.log(`UDP server listening on ${address.address}:${address.port}`);
-});
-
-// Bind to the specified port and listen for RTP packets
-socketRTP.bind(audioDetails.port, '0.0.0.0');
-
 }
 
 // Parse WWW-Authenticate header
@@ -591,38 +505,6 @@ Content-Length: 0`;
 
 // Function to generate a SIP INVITE message
 function createInviteMessage(rtpPort, regPort) {
-  var hreturn =`INVITE ${target} SIP/2.0
-Via: SIP/2.0/UDP ${myProxy}:${regPort};branch=z9hG4bK${crypto.randomBytes(8).toString('hex')}
-Max-Forwards: 70
-To: ${target}
-From: ${localUri};tag=${tag}
-Call-ID: ${callId}
-CSeq: 123 INVITE
-Contact: <sip:${username}@${myIp}:${regPort};transport=UDP>
-Allow: INVITE, ACK, CANCEL, BYE, NOTIFY, REFER, MESSAGE, OPTIONS, INF
-Content-Type: application/sdp
-Supported: replaces, norefersub, extended-refer, timer, sec-agree, outbound, path, X-cisco-serviceuri
-Allow-Events: presence, kpml, talk, as-feature-event
-User-Agent: CustomSipClient
-Content-Length: 342
-
-v=0
-o=Z 0 32573386 IN IP4 ${myIp}
-s=Custom SIP Call
-c=IN IP4 ${myIp}
-t=0 0
-m=audio  ${rtpPort} RTP/AVP 106 9 98 101 0 8 3
-a=rtpmap:106 opus/48000/2
-a=fmtp:106 sprop-maxcapturerate=16000; minptime=20; useinbandfec=1
-a=rtpmap:98 telephone-event/48000
-a=fmtp:98 0-16
-a=sendrecv
-a=rtcp-mux
-a=rtpma
-`;
-
-
-
 return `INVITE sip:18722990045@${sipServer};transport=UDP SIP/2.0
 Via: SIP/2.0/UDP ${myProxy}:${regPort};branch=z9hG4bK-524287-1---fd9e87789e292257;rport
 Max-Forwards: 70
@@ -693,7 +575,10 @@ Contact: <sip:${username}@${myIp}:${regPort};transport=UDP>
 User-Agent: CustomSipClient
 Content-Length: 0`.trim();
 }
-rl.question('Press Enter to exit...\n', () => {
-  socket.close();
-  rl.close();
-});
+// rl.question('Press Enter to exit...\n', () => {
+//   socket.close();
+//   rl.close();
+// });
+module.exports.service = {
+  initateConn
+}
